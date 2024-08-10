@@ -50,7 +50,7 @@ class TinyTracker(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 2),
             nn.Tanh()
-        )
+        )  # Coordinate (x, y)
 
     def forward(self, faces):
         x = self.conv_g(faces)
