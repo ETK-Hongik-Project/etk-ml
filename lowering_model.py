@@ -4,6 +4,10 @@ from executorch.backends.xnnpack.partition.xnnpack_partitioner import XnnpackPar
 from executorch.exir import EdgeProgramManager, ExecutorchProgramManager, to_edge
 from executorch.exir.backend.backend_api import to_backend
 
+import torch
+import torch.nn as nn
+from torchvision.models.mobilenetv3 import mobilenet_v3_small
+
 from model import TinyTracker
 
 model = TinyTracker(3).eval()

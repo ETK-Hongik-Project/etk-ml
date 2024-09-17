@@ -2,7 +2,8 @@
 
 import torch
 import torch.nn as nn
-from torchvision.models.mobilenetv3 import mobilenet_v3_small
+from torchvision.models.mobilenetv3 import mobilenet_v3_small, MobileNet_V3_Small_Weights
+from torchinfo import summary
 
 
 class GTKImageModel(nn.Module):
@@ -36,20 +37,26 @@ class TinyTracker(nn.Module):
 
         self.conv_g = nn.Conv2d(in_channels, in_channels,
                                 kernel_size=1, stride=1, padding='valid')
-        # if backbone == 'mobilenetv3':
-        #     # TODO: self.faceModel = mobilenet_v3_small(??)
-        # else:
-        self.faceModel = GTKImageModel(in_channels)
+        if backbone == 'mobilenetv3':
+            pretrained_weights = MobileNet_V3_Small_Weights.DEFAULT
+            self.faceModel = mobilenet_v3_small(
+                weights=pretrained_weights).features
+            self.conv_fm = nn.Conv2d(576, 2, kernel_size=1,
+                                     stride=1, padding='valid')
+            n_input = 32
+        else:
+            self.faceModel = GTKImageModel(in_channels)
+            self.conv_fm = nn.Conv2d(64, 2, kernel_size=1,
+                                     stride=1, padding='valid')
+            n_input = 72
 
-        self.conv_fm = nn.Conv2d(64, 2, kernel_size=1,
-                                 stride=1, padding='valid')
         self.flatten = nn.Flatten()
 
         self.fc = nn.Sequential(
-            nn.Linear(72, 128),  # assume input size = 112 by 112
+            nn.Linear(n_input, 128),  # assume input size = 112 by 112
             nn.ReLU(),
-            nn.Linear(128, 2),
-            nn.Tanh()
+            nn.Linear(128, 5),
+            nn.Softmax()
         )  # Coordinate (x, y)
 
     def forward(self, faces):
@@ -66,8 +73,12 @@ class TinyTracker(nn.Module):
 
 
 if __name__ == "__main__":
-    model = TinyTracker(3, None)
     dummy_data = torch.randn(2, 3, 112, 112)
+
+    model = TinyTracker(3, None)
     output = model(dummy_data)
-    print(f'Output Shape : {output.shape}')
-    print(f'Output : {output}')
+    summary(model, dummy_data.size())
+
+    model = TinyTracker(3)
+    output = model(dummy_data)
+    summary(model, dummy_data.size())
