@@ -1,21 +1,22 @@
-from torch.utils.data import Dataset
+import os
+from typing import Literal
+
+import numpy as np
+import scipy.io as sio
 import torch
 import torch.nn as nn
-import os
 import torch.nn.functional as F
 import torchvision.io as tio
 import torchvision.transforms.v2 as transforms
-from tqdm import tqdm
-import scipy.io as sio
-from typing import Literal
 from PIL import Image
-import numpy as np
+from torch.utils.data import Dataset
+from tqdm import tqdm
 
 
 def loadMetadata(filename, silent=False):
     try:
         if not silent:
-            tqdm.write('\tReading metadata from %s...' % filename)
+            tqdm.write('\tReading metadata from %s ...' % filename)
         metadata = sio.loadmat(filename, squeeze_me=True,
                                struct_as_record=False)
     except:
