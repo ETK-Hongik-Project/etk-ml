@@ -10,6 +10,7 @@ import torchvision.io as tio
 import torchvision.transforms.v2 as transforms
 from PIL import Image
 from torch.utils.data import Dataset
+from typing import Tuple
 from tqdm import tqdm
 
 
@@ -28,9 +29,11 @@ def loadMetadata(filename, silent=False):
 class GTKDataset(Dataset):
     def __init__(self, data_path: str,
                  split: Literal['train', 'val', 'test'] = 'train',
-                 img_size: tuple = (112, 112)):
+                 img_size: tuple = (112, 112),
+                 channel: Literal[1, 3] = 1):
         self.data_path = data_path
         self.img_size = img_size
+        self.channel = channel
 
         tqdm.write("Loading Dataset...")
 
@@ -44,6 +47,7 @@ class GTKDataset(Dataset):
 
         # Augmenatation & Transfromation(Normalization)
         # TODO:? Random Rotation?
+        self.resize = transforms.Resize(self.img_size)
         self.augmentation = transforms.Compose([
             transforms.Lambda(lambda img: img +
                               torch.rand_like(img) * 3 * torch.randn(1)),
@@ -69,12 +73,12 @@ class GTKDataset(Dataset):
         self.indices = np.argwhere(self.mask)[:, 0]
         tqdm.write(f'Loaded {split} Dataset: {len(self.indices)} Records.')
 
-    def load_image(self, path: str, channel: int = 3):
+    def load_image(self, path: str):
         try:
-            if channel == 1:
+            if self.channel == 1:
                 # Don't Need to Read PIL image and transform to the tensor.
                 img = tio.read_image(path, tio.ImageReadMode.GRAY)
-            elif channel == 3:
+            elif self.channel == 3:
                 img = tio.read_image(path)
         except:
             raise RuntimeError(f"Couldn't Read IMG : f{path}")
@@ -92,7 +96,7 @@ class GTKDataset(Dataset):
         X, Y = gaze[0], gaze[1]
 
         direction = None
-        if np.abs(X) < c and np.abs(Y) < c:
+        if np.abs(X) <= c and np.abs(Y) <= c:
             direction = 4  # Center
         elif X < -c and np.abs(X) > np.abs(Y):
             direction = 2  # Left
@@ -105,7 +109,7 @@ class GTKDataset(Dataset):
 
         return F.one_hot(torch.tensor(direction), num_classes=5)
 
-    def create_grid(g, sx, sy):
+    def create_grid(self, g: np.ndarray, sx: int, sy: int) -> Tuple[np.ndarray, np.ndarray]:
         """Create 2 Channel Info for Face Position.
            One of channel Contain Row info, the Other contains Column Info
 
@@ -131,14 +135,24 @@ class GTKDataset(Dataset):
         face_img_path = os.path.join(self.data_path,
                                      f"{self.meta_file['labelRecNum'][idx]:05d}/appleFace/{self.meta_file['frameIndex'][idx]:05d}.jpg")
 
+        # Load and Transform Gray Img
         face_img = self.load_image(face_img_path)
+        face_img = self.resize(face_img)
         if self.split == "train":
             face_img = self.transform(face_img)
-        face_img = self.normalization(face_img)
+        face_img = self.normalization(face_img)  # (1, 112, 112)
+
+        # Create Grid Info
+        grid = self.meta_file['labelFaceGrid'][idx, :]
+        grid_x, grid_y = self.create_grid(grid, *self.img_size)
+        grid_x = torch.from_numpy(np.expand_dims(grid_x, 0))  # (1, 112, 112)
+        grid_y = torch.from_numpy(np.expand_dims(grid_y, 0))  # (1, 112, 112)
+
+        img = torch.concat([face_img, grid_x, grid_y], dim=0)  # (3, 112, 112)
 
         gaze = np.array([
             self.meta_file['labelDotXCam'][idx], self.meta_file['labelDotYCam'][idx]
         ], np.float32)
         direction = self.gaze_to_direction(gaze)
 
-        return face_img, direction
+        return img, direction
