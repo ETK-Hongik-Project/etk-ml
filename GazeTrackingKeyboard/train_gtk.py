@@ -1,3 +1,7 @@
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
 from gtk_dataset import GTKDataset
 from model import TinyTracker
 import argparse
@@ -7,6 +11,12 @@ from torch.utils.data import DataLoader, Dataset
 import torch.nn as nn
 from tqdm import tqdm
 import numpy as np
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
+
+from lowering_model import lowering_model
+
 
 
 def parse_args():
@@ -37,7 +47,8 @@ def train_epoch(dataloader: DataLoader, model: nn.Module,
     epoch_loss = 0.0
     n_batches = len(dataloader)
 
-    for x, y in dataloader:
+    pbar = tqdm(dataloader, desc=f'Train Batch({dataloader.batch_size})',leave=False)
+    for x, y in pbar:
         x = x.to(device)
         y = y.to(device)
 
@@ -49,6 +60,8 @@ def train_epoch(dataloader: DataLoader, model: nn.Module,
         optimizer.step()
         epoch_loss += loss.item()
 
+        pbar.set_postfix({"Loss": loss.item()})
+        
     return epoch_loss / n_batches
 
 
@@ -59,8 +72,9 @@ def evaluate(dataloader: DataLoader, model: nn.Module,
     epoch_loss = 0.0
     n_batches = len(dataloader)
     preds = []
+    pbar = tqdm(dataloader, desc=f'Evaluation Batch({dataloader.batch_size})', leave=False)
     with torch.no_grad():
-        for x, y in dataloader:
+        for x, y in pbar:
             x = x.to(device)
             y = y.to(device)
 
@@ -70,6 +84,8 @@ def evaluate(dataloader: DataLoader, model: nn.Module,
             loss = criterion(pred, y)
 
             epoch_loss += loss.item()
+            
+            pbar.set_postfix({"Loss": loss.item()})
 
     if return_preds:
         preds = np.concatenate(preds, axis=0)
@@ -81,6 +97,8 @@ if __name__ == "__main__":
     # TODO: Train Loop
     arguments = parse_args()
     print(arguments.data_path, arguments.in_channel)
+    os.makedirs(arguments.model_path, exist_ok=True)
+    os.makedirs(os.path.join(arguments.model_path, 'weights'), exist_ok=True)
 
     # Set Device
     device = None
@@ -93,15 +111,15 @@ if __name__ == "__main__":
         device = torch.device('cpu')
     print(f'{device} is available')
 
-    model = TinyTracker(in_channels=arguments.in_channel,
+    model:nn.Module = TinyTracker(in_channels=arguments.in_channel,
                         backbone=arguments.backbone)
 
     train_set = GTKDataset(data_path=arguments.data_path, split='train',
-                           img_size=arguments.image_size, channel=arguments.in_channel)
+                           img_size=(arguments.image_size, arguments.image_size), channel=arguments.in_channel)
     val_set = GTKDataset(data_path=arguments.data_path, split='val',
-                         img_size=arguments.image_size, channel=arguments.in_channel)
+                         img_size=(arguments.image_size, arguments.image_size), channel=arguments.in_channel)
     test_set = GTKDataset(data_path=arguments.data_path, split='test',
-                          img_size=arguments.image_size, channel=arguments.in_channel)
+                          img_size=(arguments.image_size, arguments.image_size), channel=arguments.in_channel)
 
     train_loader = DataLoader(train_set,
                               batch_size=arguments.batch_size,
@@ -114,12 +132,13 @@ if __name__ == "__main__":
                              shuffle=True)
 
     model.to(device)
-    optim = Adam(lr=arguments.learning_rate)
+    optim = Adam(model.parameters(), lr=arguments.learning_rate)
     loss_fn = nn.CrossEntropyLoss()
 
     loss_graph = []
     val_loss_graph = []
-    best_loss = 987654321
+    best_loss = float('inf')
+    best_model_path = os.path.join(arguments.model_path, "weights/best_model.pth")
     progress_bar = tqdm(range(arguments.num_epochs), desc='Epoch', leave=True)
     for epoch in progress_bar:
         train_loss = train_epoch(dataloader=train_loader, model=model,
@@ -129,17 +148,22 @@ if __name__ == "__main__":
         if epoch % 3 == 0:
             val_loss, _ = evaluate(dataloader=val_loader, model=model,
                                    criterion=loss_fn, device=device, return_preds=False)
-            val_loss_graph(val_loss)
+            val_loss_graph.append(val_loss)
             if val_loss < best_loss:
                 best_loss = val_loss
-
+                torch.save(model.state_dict(), best_model_path)
+                
         progress_bar.set_postfix(
             {
-                'Train Loss': f'{train_loss:.4e}',
-                'Validation Loss': f'{val_loss:.4e}'
+                'Train Loss': f'{train_loss:.4f}',
+                'Validation Loss': f'{val_loss:.4f}'
             }
         )
 
-    test_loss = evaluate(dataloader=test_loader, model=model,
+    model.load_state_dict(torch.load(best_model_path))
+    test_loss, _ = evaluate(dataloader=test_loader, model=model,
                          criterion=loss_fn, device=device, return_preds=False)
     tqdm.write(f"Model Training Done. Test Loss : {test_loss:.4f}")
+
+    lowering_model(model=model.to(torch.device('cpu')), model_path=os.path.abspath(arguments.model_path),
+                   backend='xnnpack')

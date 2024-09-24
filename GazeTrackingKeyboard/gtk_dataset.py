@@ -82,7 +82,7 @@ class GTKDataset(Dataset):
                 img = tio.read_image(path)
         except:
             raise RuntimeError(f"Couldn't Read IMG : f{path}")
-        return img
+        return img.float()
 
     def gaze_to_direction(self, gaze: np.ndarray, c: int = 6) -> torch.Tensor:
         """
@@ -107,7 +107,7 @@ class GTKDataset(Dataset):
         elif Y < -c and np.abs(X) < np.abs(Y):
             direction = 1  # Bottom
 
-        return F.one_hot(torch.tensor(direction), num_classes=5)
+        return torch.tensor(direction)
 
     def create_grid(self, g: np.ndarray, sx: int, sy: int) -> Tuple[np.ndarray, np.ndarray]:
         """Create 2 Channel Info for Face Position.
@@ -122,8 +122,8 @@ class GTKDataset(Dataset):
         x_end = (g[0] + g[2]) * 2 / 25 - 1
         y_start = g[1] * 2 / 25 - 1
         y_end = (g[1] + g[3]) * 2 / 25 - 1
-        linx = np.linspace(x_start, x_end, sx)
-        liny = np.linspace(y_start, y_end, sy)
+        linx = np.linspace(x_start, x_end, sx, dtype=np.float32)
+        liny = np.linspace(y_start, y_end, sy, dtype=np.float32)
         return np.meshgrid(linx, liny)
 
     def __len__(self):
@@ -139,7 +139,7 @@ class GTKDataset(Dataset):
         face_img = self.load_image(face_img_path)
         face_img = self.resize(face_img)
         if self.split == "train":
-            face_img = self.transform(face_img)
+            face_img = self.augmentation(face_img)
         face_img = self.normalization(face_img)  # (1, 112, 112)
 
         # Create Grid Info
@@ -156,3 +156,9 @@ class GTKDataset(Dataset):
         direction = self.gaze_to_direction(gaze)
 
         return img, direction
+
+if __name__ == "__main__":
+    data_path = "./Processed"
+    trainset = GTKDataset(data_path=data_path, split='train')
+    valset = GTKDataset(data_path=data_path, split='val')
+    testset = GTKDataset(data_path=data_path, split='test')

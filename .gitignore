@@ -38,4 +38,5 @@ model
 
 GazeTrackingKeyboard/GazeCapture
 GazeTrackingKeyboard/Processed
+GazeTrackingKeyboard/models
 GazeTrackingKeyboard/test*

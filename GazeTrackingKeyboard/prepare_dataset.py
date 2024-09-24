@@ -79,7 +79,7 @@ def main():
         appleFace = readJson(os.path.join(recDir, 'appleFace.json'))
         if appleFace is None:
             continue
-        appleLeftEye = readJson(os.path.join(recDir, 'appleLeftEye.json'))
+        # appleLeftEye = readJson(os.path.join(recDir, 'appleLeftEye.json'))
         # if appleLeftEye is None:
         #     continue
         # appleRightEye = readJson(os.path.join(recDir, 'appleRightEye.json'))
@@ -125,24 +125,26 @@ def main():
             # Can we use it?
             if not allValid[j]:
                 continue
+            
+            if not os.path.exists(os.path.join(facePath, '%05d.jpg' % frame)):
+            
+                # Load image
+                imgFile = os.path.join(recDir, 'frames', '%05d.jpg' % frame)
+                if not os.path.isfile(imgFile):
+                    logError('Warning: Could not read image file %s!' % imgFile)
+                    continue
+                img = Image.open(imgFile)
+                if img is None:
+                    logError('Warning: Could not read image file %s!' % imgFile)
+                    continue
+                img = np.array(img.convert('RGB'))
 
-            # Load image
-            imgFile = os.path.join(recDir, 'frames', '%05d.jpg' % frame)
-            if not os.path.isfile(imgFile):
-                logError('Warning: Could not read image file %s!' % imgFile)
-                continue
-            img = Image.open(imgFile)
-            if img is None:
-                logError('Warning: Could not read image file %s!' % imgFile)
-                continue
-            img = np.array(img.convert('RGB'))
+                # Crop images
+                imFace = cropImage(img, faceBbox[j, :])
 
-            # Crop images
-            imFace = cropImage(img, faceBbox[j, :])
-
-            # Save images
-            Image.fromarray(imFace).save(os.path.join(
-                facePath, '%05d.jpg' % frame), quality=95)
+                # Save images
+                Image.fromarray(imFace).save(os.path.join(
+                    facePath, '%05d.jpg' % frame), quality=95)
 
             # Collect metadata
             meta['labelRecNum'] += [int(recording)]
@@ -178,21 +180,20 @@ def main():
     mIndex = {k: i for i, k in enumerate(mKey)}
     rIndex = {k: i for i, k in enumerate(rKey)}
     mToR = np.zeros((len(mKey,)), int) - 1
-    # TODO: 당장은 필요없는데, 나중에 풀 데이터로 학습할 때 필요함.
-    # for i, k in enumerate(mKey):
-    #     if k in rIndex:
-    #         mToR[i] = rIndex[k]
-    #     else:
-    #         logError(
-    #             'Did not find rec_frame %s from the new dataset in the reference dataset!' % k)
+    for i, k in enumerate(mKey):
+        if k in rIndex:
+            mToR[i] = rIndex[k]
+        # else:
+        #     logError(
+        #         'Did not find rec_frame %s from the new dataset in the reference dataset!' % k)
     rToM = np.zeros((len(rKey,)), int) - 1
-    # for i, k in enumerate(rKey):
-    #     if k in mIndex:
-    #         rToM[i] = mIndex[k]
-    #     else:
-    #         logError(
-    #             'Did not find rec_frame %s from the reference dataset in the new dataset!' % k, critical=False)
-    #         # break
+    for i, k in enumerate(rKey):
+        if k in mIndex:
+            rToM[i] = mIndex[k]
+        # else:
+            # logError(
+            #     'Did not find rec_frame %s from the reference dataset in the new dataset!' % k, critical=False)
+            # break
 
     # Copy split from reference
     meta['labelTrain'] = np.zeros((len(meta['labelRecNum'],)), np.bool_)

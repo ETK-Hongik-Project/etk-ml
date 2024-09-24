@@ -41,6 +41,15 @@ class TinyTracker(nn.Module):
             pretrained_weights = MobileNet_V3_Small_Weights.DEFAULT
             self.faceModel = mobilenet_v3_small(
                 weights=pretrained_weights).features
+            
+            # 첫 번째 레이어 수정: 3채널 -> 1채널 입력 처리
+            first_layer = self.faceModel[0][0]  # 첫 번째 Conv2d 레이어에 접근
+            self.faceModel[0][0] = nn.Conv2d(in_channels, first_layer.out_channels, 
+                                             kernel_size=first_layer.kernel_size,
+                                             stride=first_layer.stride, 
+                                             padding=first_layer.padding)
+
+
             self.conv_fm = nn.Conv2d(576, 2, kernel_size=1,
                                      stride=1, padding='valid')
             n_input = 32
@@ -56,18 +65,14 @@ class TinyTracker(nn.Module):
             nn.Linear(n_input, 128),  # assume input size = 112 by 112
             nn.ReLU(),
             nn.Linear(128, 5),
-            nn.Softmax()
+            # nn.Softmax()
         )  # Coordinate (x, y)
 
     def forward(self, faces):
         x = self.conv_g(faces)
-        print(x.shape)
         x = self.faceModel(x)
-        print(x.shape)
         x = self.conv_fm(x)
-        print(x.shape)
         x = self.flatten(x)
-        print(x.shape)
         x = self.fc(x)
         return x
 
