@@ -35,7 +35,7 @@ class TinyTracker(nn.Module):
     def __init__(self, in_channels=3, backbone="mobilenetv3"):
         super().__init__()
 
-        self.conv_g = nn.Conv2d(in_channels, in_channels,
+        self.conv_g = nn.Conv2d(3, in_channels,
                                 kernel_size=1, stride=1, padding='valid')
         if backbone == 'mobilenetv3':
             pretrained_weights = MobileNet_V3_Small_Weights.DEFAULT

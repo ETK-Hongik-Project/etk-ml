@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torchvision.models.mobilenetv3 import mobilenet_v3_small
 
-from model import TinyTracker
+from GazeTrackingKeyboard.model import TinyTracker
 
 model = TinyTracker(3).eval()
 dummy_data = (torch.randn(1, 3, 112, 112),)
